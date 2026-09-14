@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>車道衝刺 Lane Rush｜課堂 Demo</title>
+<style>
+  :root {
+    --bg:#070b16; --ink:#f6f3ec; --muted:#9aa6c2; --coin:#ffd24a;
+    --accent:#6ea8ff; --danger:#ff4d6d; --panel:#121a2e;
+  }
+  *{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:radial-gradient(900px 500px at 50% -20%,#1a2750,var(--bg));color:var(--ink);font-family:"Segoe UI","PingFang TC","Noto Sans TC",sans-serif;overflow:hidden}
+  #app{max-width:480px;margin:0 auto;height:100%;display:flex;flex-direction:column;padding:12px;gap:10px}
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+  h1{margin:0;font-size:22px;letter-spacing:.06em}
+  .sub{color:var(--muted);font-size:12px;margin-top:3px}
+  .hud{display:flex;gap:8px}
+  .chip{background:var(--panel);border:1px solid #243356;border-radius:999px;padding:7px 12px;min-width:84px;text-align:center}
+  .chip b{display:block;font-size:18px;line-height:1.1}
+  .chip span{font-size:10px;color:var(--muted)}
+  #wrap{position:relative;flex:1;min-height:520px;border-radius:20px;overflow:hidden;border:1px solid #2a3b66;background:#0a1020}
+  canvas{width:100%;height:100%;display:block;touch-action:none}
+  #overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(5,8,18,.7);backdrop-filter:blur(5px)}
+  .card{width:min(380px,92%);background:var(--panel);border:1px solid #314872;border-radius:18px;padding:20px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+  .card h2{margin:0 0 8px;font-size:26px}
+  .card p{margin:0 0 14px;color:var(--muted);font-size:13px;line-height:1.55}
+  button{border:0;border-radius:999px;padding:12px 22px;background:linear-gradient(90deg,#7eb0ff,#b48cff);color:#071018;font-weight:800;font-size:15px;cursor:pointer}
+  .tips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:0 0 14px}
+  .tips i{font-style:normal;font-size:11px;padding:5px 8px;border-radius:999px;background:#1b2744;color:#c9d6f5}
+  footer{text-align:center;color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>車道衝刺</h1>
+      <div class="sub">三車道跑酷｜金幣＋閃避｜SCORE / HIGH</div>
+    </div>
+    <div class="hud">
+      <div class="chip"><span>SCORE</span><b id="score">0</b></div>
+      <div class="chip"><span>HIGH</span><b id="high">0</b></div>
+      <div class="chip"><span>COIN</span><b id="coin">0</b></div>
+    </div>
+  </header>
+  <div id="wrap">
+    <canvas id="c"></canvas>
+    <div id="overlay">
+      <div class="card" id="card">
+        <h2>Lane Rush</h2>
+        <p>現在學生熟的跑酷玩法：左右換道、撿金幣、躲障礙。越跑越快。</p>
+        <div class="tips"><i>← → / A D</i><i>滑動換道</i><i>撞到結束</i></div>
+        <button id="go">開始衝刺</button>
+      </div>
+    </div>
+  </div>
+  <footer>品牌設計與 AI 應用｜對照舊示範「俄羅斯方塊」→ 新示範「手機跑酷」</footer>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const card = document.getElementById('card');
+  const go = document.getElementById('go');
+  const scoreEl = document.getElementById('score');
+  const highEl = document.getElementById('high');
+  const coinEl = document.getElementById('coin');
+  const KEY = 'lane-rush-high-v1';
+  let high = +localStorage.getItem(KEY) || 0;
+  highEl.textContent = high;
+
+  let W=0,H=0,dpr=1;
+  const lanes = 3;
+  function resize(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(devicePixelRatio||1, 2);
+    W = r.width; H = r.height;
+    canvas.width = (W*dpr)|0; canvas.height = (H*dpr)|0;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener('resize', resize); resize();
+
+  const S = {
+    running:false,
+    lane:1,
+    targetLane:1,
+    x:0,
+    speed:320,
+    dist:0,
+    score:0,
+    coins:0,
+    objs:[],
+    t:0,
+    spawn:0,
+    dead:false,
+    flash:0,
+  };
+
+  function laneX(i){ return W * (0.22 + i * 0.28); }
+
+  function reset(){
+    S.running=true; S.dead=false; S.lane=1; S.targetLane=1;
+    S.x=laneX(1); S.speed=340; S.dist=0; S.score=0; S.coins=0;
+    S.objs=[]; S.t=0; S.spawn=0; S.flash=0;
+    scoreEl.textContent='0'; coinEl.textContent='0';
+    overlay.style.display='none';
+  }
+
+  function gameOver(){
+    S.running=false; S.dead=true; S.flash=1;
+    if (S.score>high){ high=S.score; localStorage.setItem(KEY,String(high)); highEl.textContent=high; }
+    card.innerHTML = `
+      <h2>撞到了</h2>
+      <p>本局 <b style="color:#6ea8ff">${S.score}</b> 分 · 金幣 <b style="color:#ffd24a">${S.coins}</b><br/>最高 <b style="color:#3dd68c">${high}</b></p>
+      <div class="tips"><i>換道再熟一點</i><i>越後面越快</i></div>
+      <button id="go2">再來一局</button>`;
+    overlay.style.display='grid';
+    document.getElementById('go2').onclick = reset;
+  }
+
+  go.onclick = reset;
+
+  function spawn(){
+    const lane = (Math.random()*3)|0;
+    const kind = Math.random() < 0.62 ? 'coin' : 'block';
+    // avoid impossible triple walls sometimes: if last two were blocks same pattern, bias coin
+    S.objs.push({lane, kind, y:-40, r: kind==='coin'?16:22, taken:false});
+  }
+
+  const keys={};
+  addEventListener('keydown', e=>{
+    keys[e.key]=true;
+    if (!S.running) return;
+    if (e.key==='ArrowLeft'||e.key==='a'||e.key==='A') S.targetLane=Math.max(0,S.targetLane-1);
+    if (e.key==='ArrowRight'||e.key==='d'||e.key==='D') S.targetLane=Math.min(2,S.targetLane+1);
+  });
+  addEventListener('keyup', e=> keys[e.key]=false);
+
+  let sx=null;
+  canvas.addEventListener('pointerdown', e=>{ sx=e.clientX; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointerup', e=>{
+    if (sx==null || !S.running) return;
+    const dx=e.clientX-sx; sx=null;
+    if (Math.abs(dx)<28) return;
+    if (dx<0) S.targetLane=Math.max(0,S.targetLane-1);
+    else S.targetLane=Math.min(2,S.targetLane+1);
+  });
+
+  let last=performance.now();
+  function frame(now){
+    const dt=Math.min(0.033,(now-last)/1000); last=now;
+    if (S.running){
+      S.t+=dt;
+      S.speed = 340 + Math.min(420, S.t*18);
+      S.dist += S.speed*dt;
+      S.score = Math.floor(S.dist/12) + S.coins*5;
+      scoreEl.textContent=String(S.score);
+      // ease lane
+      const tx=laneX(S.targetLane);
+      S.x += (tx-S.x)*Math.min(1, dt*14);
+      S.lane = S.targetLane;
+      S.spawn += dt;
+      const gap = Math.max(0.28, 0.72 - S.t*0.015);
+      if (S.spawn>gap){ S.spawn=0; spawn(); if (Math.random()<0.35) spawn(); }
+
+      const py=H*0.78;
+      for (let i=S.objs.length-1;i>=0;i--){
+        const o=S.objs[i];
+        o.y += S.speed*dt;
+        const ox=laneX(o.lane);
+        const near = Math.abs(o.y-py)<34 && Math.abs(ox-S.x)<34;
+        if (near && !o.taken){
+          if (o.kind==='coin'){
+            o.taken=true; S.coins++; coinEl.textContent=String(S.coins);
+            S.objs.splice(i,1); continue;
+          } else {
+            gameOver(); break;
+          }
+        }
+        if (o.y>H+60) S.objs.splice(i,1);
+      }
+      if (S.flash>0) S.flash=Math.max(0,S.flash-dt);
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function draw(){
+    // road
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#152038'); g.addColorStop(1,'#0a101d');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    // moving dashes for speed feel
+    const scroll=(S.dist*0.4)%70;
+    for (let i=0;i<lanes;i++){
+      const x=laneX(i);
+      ctx.fillStyle='rgba(255,255,255,0.05)';
+      roundRect(x-46, 0, 92, H, 0); ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.18)';
+      ctx.setLineDash([28,42]);
+      ctx.lineDashOffset=-scroll;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // horizon glow
+    ctx.fillStyle='rgba(110,168,255,0.12)';
+    ctx.beginPath(); ctx.ellipse(W/2, 40, W*0.45, 50, 0, 0, Math.PI*2); ctx.fill();
+
+    for (const o of S.objs){
+      const x=laneX(o.lane);
+      if (o.kind==='coin'){
+        ctx.fillStyle='#ffd24a';
+        ctx.beginPath(); ctx.arc(x,o.y,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#8a6200';
+        ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('¥', x, o.y+1);
+      } else {
+        ctx.fillStyle='#ff4d6d';
+        roundRect(x-28, o.y-24, 56, 48, 10); ctx.fill();
+        ctx.fillStyle='#2a0610';
+        ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('BLOCK', x, o.y);
+      }
+    }
+
+    // player
+    const py=H*0.78;
+    ctx.fillStyle='#6ea8ff';
+    roundRect(S.x-26, py-30, 52, 52, 14); ctx.fill();
+    ctx.fillStyle='#071018';
+    ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('YOU', S.x, py);
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(S.x, py+28, 24, 7, 0, 0, Math.PI*2); ctx.fill();
+
+    if (S.flash>0){
+      ctx.fillStyle=`rgba(255,77,109,${S.flash*0.35})`;
+      ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
