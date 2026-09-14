@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>車道衝刺 Lane Rush｜課堂 Demo</title>
+<title>車道衝刺</title>
 <style>
   :root {
     --bg:#070b16; --ink:#f6f3ec; --muted:#9aa6c2; --coin:#ffd24a;
@@ -48,14 +48,14 @@
     <canvas id="c"></canvas>
     <div id="overlay">
       <div class="card" id="card">
-        <h2>Lane Rush</h2>
-        <p>現在學生熟的跑酷玩法：左右換道、撿金幣、躲障礙。越跑越快。</p>
+        <h2>車道衝刺</h2>
+        <p>左右換道、撿金幣、躲障礙。越跑越快。</p>
         <div class="tips"><i>← → / A D</i><i>滑動換道</i><i>撞到結束</i></div>
         <button id="go">開始衝刺</button>
       </div>
     </div>
   </div>
-  <footer>品牌設計與 AI 應用｜對照舊示範「俄羅斯方塊」→ 新示範「手機跑酷」</footer>
+  <footer>← → / A D　·　滑動換道　·　撞到結束</footer>
 </div>
 <script>
 (() => {
@@ -115,7 +115,7 @@
       <h2>撞到了</h2>
       <p>本局 <b style="color:#6ea8ff">${S.score}</b> 分 · 金幣 <b style="color:#ffd24a">${S.coins}</b><br/>最高 <b style="color:#3dd68c">${high}</b></p>
       <div class="tips"><i>換道再熟一點</i><i>越後面越快</i></div>
-      <button id="go2">再來一局</button>`;
+      <button id="go2">再玩一次</button>`;
     overlay.style.display='grid';
     document.getElementById('go2').onclick = reset;
   }

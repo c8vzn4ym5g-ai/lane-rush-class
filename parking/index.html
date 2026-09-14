@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>福岡停車｜Agent 條件搜尋 Demo</title>
+<style>
+  :root {
+    --bg: #060912;
+    --panel: #0e1628;
+    --panel2: #121c34;
+    --line: #243556;
+    --ink: #eef3ff;
+    --muted: #8fa0c2;
+    --accent: #5aa7ff;
+    --accent2: #8b7cff;
+    --ok: #3dd68c;
+    --warn: #ffd24a;
+    --bad: #ff4d6d;
+    --glow: rgba(90,167,255,.18);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; min-height: 100%;
+    background:
+      radial-gradient(900px 420px at 15% -10%, #1a2a55 0%, transparent 55%),
+      radial-gradient(700px 380px at 90% 10%, #2a1850 0%, transparent 50%),
+      var(--bg);
+    color: var(--ink);
+    font-family: "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; opacity: .07;
+    background-image:
+      linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .wrap {
+    position: relative;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 28px 18px 48px;
+  }
+  .top {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    justify-content: space-between; align-items: flex-end;
+    margin-bottom: 22px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); background: rgba(90,167,255,.1);
+    border: 1px solid rgba(90,167,255,.35); border-radius: 999px;
+    padding: 6px 12px;
+  }
+  .badge .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+    box-shadow: 0 0 10px var(--ok); animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse { 50% { opacity: .35; } }
+  h1 {
+    margin: 10px 0 6px; font-size: clamp(24px, 4vw, 34px);
+    letter-spacing: .04em; font-weight: 800;
+  }
+  .lead { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 520px; }
+  .steps {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 8px;
+  }
+  .step-pill {
+    border: 1px solid var(--line); background: var(--panel);
+    color: var(--muted); border-radius: 999px; padding: 7px 12px;
+    font-size: 12px; cursor: pointer; transition: .2s;
+  }
+  .step-pill:hover { border-color: #3a5588; color: var(--ink); }
+  .step-pill.active {
+    color: #071018; font-weight: 700;
+    background: linear-gradient(90deg, #7eb0ff, #b48cff);
+    border-color: transparent;
+  }
+  .step-pill.done { color: var(--ok); border-color: rgba(61,214,140,.4); }
+  .stage {
+    display: grid; grid-template-columns: 1.05fr .95fr; gap: 16px;
+  }
+  @media (max-width: 820px) { .stage { grid-template-columns: 1fr; } }
+  .panel {
+    background: linear-gradient(180deg, rgba(18,28,52,.95), rgba(10,16,30,.95));
+    border: 1px solid var(--line); border-radius: 20px;
+    padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+    min-height: 420px;
+  }
+  .panel h2 { margin: 0 0 4px; font-size: 18px; }
+  .panel .sub { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .agent {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; line-height: 1.65;
+    background: #070d1a; border: 1px solid #1c2a48; border-radius: 14px;
+    padding: 14px; min-height: 210px; overflow: hidden;
+  }
+  .agent .line { opacity: 0; transform: translateY(6px); animation: fadeIn .35s forwards; }
+  .agent .dim { color: var(--muted); }
+  .agent .hi { color: var(--accent); }
+  .agent .ok { color: var(--ok); }
+  .agent .bad { color: var(--bad); }
+  .agent .warn { color: var(--warn); }
+  @keyframes fadeIn { to { opacity: 1; transform: none; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+  .chip {
+    font-size: 11px; padding: 6px 10px; border-radius: 999px;
+    background: #152038; border: 1px solid #2a3f68; color: #c9d6f5;
+  }
+  .chip.hot { border-color: rgba(255,210,74,.45); color: var(--warn); }
+  .chip.fail { border-color: rgba(255,77,109,.45); color: var(--bad); }
+  .chip.pass { border-color: rgba(61,214,140,.45); color: var(--ok); }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;
+  }
+  th, td {
+    text-align: left; padding: 10px 8px; border-bottom: 1px solid #1d2b48;
+  }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+  .price { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .tag {
+    display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 999px;
+    background: #1a2744; color: #b8c7e8; margin-left: 4px;
+  }
+  .tag.bad { background: rgba(255,77,109,.15); color: var(--bad); }
+  .tag.ok { background: rgba(61,214,140,.15); color: var(--ok); }
+  .tag.warn { background: rgba(255,210,74,.12); color: var(--warn); }
+  .result-card {
+    border-radius: 16px; padding: 14px 16px; margin-top: 10px;
+    border: 1px solid var(--line); background: rgba(255,255,255,.02);
+  }
+  .result-card.best {
+    border-color: rgba(61,214,140,.45);
+    background: linear-gradient(135deg, rgba(61,214,140,.1), rgba(90,167,255,.06));
+  }
+  .result-card.backup {
+    border-color: rgba(90,167,255,.35);
+    background: linear-gradient(135deg, rgba(90,167,255,.08), transparent);
+  }
+  .result-card.fail {
+    border-color: rgba(255,77,109,.4);
+    background: rgba(255,77,109,.06);
+  }
+  .result-card h3 { margin: 0 0 6px; font-size: 15px; }
+  .result-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .big-num { font-size: 28px; font-weight: 900; letter-spacing: .02em; margin: 4px 0 2px; }
+  .actions {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; align-items: center;
+  }
+  button.primary, button.ghost {
+    border: 0; border-radius: 999px; padding: 11px 18px; font-weight: 800;
+    font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  button.primary {
+    background: linear-gradient(90deg, #7eb0ff, #b48cff); color: #071018;
+    box-shadow: 0 10px 30px rgba(110,168,255,.25);
+  }
+  button.ghost {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .meter {
+    height: 8px; border-radius: 999px; background: #152038; overflow: hidden; margin: 10px 0 4px;
+  }
+  .meter > i {
+    display: block; height: 100%; width: 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .55s ease;
+  }
+  .compare {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center;
+    margin-top: 12px;
+  }
+  .vs {
+    width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    background: #152038; border: 1px solid var(--line); font-size: 11px; color: var(--muted);
+  }
+  .foot {
+    margin-top: 18px; text-align: center; color: var(--muted); font-size: 11px;
+  }
+  .hidden { display: none !important; }
+  .strike { text-decoration: line-through; opacity: .45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="badge"><span class="dot"></span> OFFLINE AGENT · NO LOGIN</div>
+      <h1>福岡停車｜條件一次對齊</h1>
+      <p class="lead">真實課堂案例：THE GATE HOTEL 附近 × Nissan Serena。點下一步，看 Agent 怎麼把條件整片抓齊、再隨約束翻牌。</p>
+    </div>
+  </div>
+
+  <div class="steps" id="pills"></div>
+
+  <div class="stage">
+    <section class="panel">
+      <h2 id="leftTitle">步驟</h2>
+      <p class="sub" id="leftSub"></p>
+      <div class="agent" id="agentLog" aria-live="polite"></div>
+      <div class="chips" id="condChips"></div>
+      <div class="meter"><i id="bar"></i></div>
+      <div class="actions">
+        <button class="ghost" id="btnBack" type="button">上一步</button>
+        <button class="primary" id="btnNext" type="button">開始搜尋</button>
+        <span class="hint" id="hint"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="rightTitle">結果面板</h2>
+      <p class="sub" id="rightSub">條件進來後，比價表與淘汰會在這裡刷新。</p>
+      <div id="resultPane"></div>
+    </section>
+  </div>
+
+  <p class="foot">純前端離線 Demo · 可 file:// 或 GitHub Pages 開啟 · 數字為課堂案例量級，現場仍應核對官方費率</p>
+</div>
+
+<script>
+(() => {
+  const steps = [
+    {
+      id: 'conditions',
+      pill: '1 條件',
+      leftTitle: '丟出第一包條件',
+      leftSub: '飯店、車場名、天數——以前要開多分頁；現在一次丟進 Agent。',
+      rightTitle: '任務條件',
+      rightSub: '先鎖定地點與初步時長。',
+      btn: '大量 Match',
+      hint: '下一步：同時比 Times / Luz',
+      progress: 18,
+      chips: [
+        ['地點', 'THE GATE HOTEL 福岡'],
+        ['候選', 'Times 天神北 · Luz 福岡天神'],
+        ['時長', '停 3 天'],
+        ['目標', '費用多少']
+      ],
+      log: [
+        ['dim', '> agent.ingest(query)'],
+        ['hi', '地點 = THE GATE HOTEL 福岡附近'],
+        ['', '候選 = Times 天神北 / Luz 福岡天神'],
+        ['', '時長 = 連續停放 3 天'],
+        ['ok', '狀態：條件已鎖定，開始抓費率與步行距離…']
+      ],
+      render() {
+        return `
+          <div class="result-card">
+            <h3>查詢包</h3>
+            <p>不是只問「附近有沒有停車場」，而是同時要<strong>比價、過夜規則、步行距離</strong>。</p>
+            <div class="chips" style="margin-top:10px">
+              <span class="chip hot">Gate Hotel</span>
+              <span class="chip">Times</span>
+              <span class="chip">Luz</span>
+              <span class="chip">3 days</span>
+            </div>
+          </div>`;
+      }
+    },
+    {
+      id: 'match',
+      pill: '2 大量 Match',
+      leftTitle: '整片抓齊 · 第一張比價表',
+      leftSub: 'Agent 同時算上限怎麼重複、標機械式注意事項。',
+      rightTitle: '3 天 2 夜比價',
+      rightSub: '第一輪結果：Luz 看起來便宜一半。',
+      btn: '改時段 → 31 小時',
+      hint: '下一步：時段一改，排序會翻',
+      progress: 38,
+      chips: [
+        ['Times', '≈ ¥8,800（48h）'],
+        ['Luz 平日', '¥4,400'],
+        ['Luz 週末', '¥5,600'],
+        ['注意', 'Luz 機械式 · 21:00 後難取車']
+      ],
+      log: [
+        ['dim', '> agent.match(nearby + rates)'],
+        ['', 'Times 天神北｜12h 上限 ¥2,200 × 4 → ¥8,800'],
+        ['', 'Luz｜平日 ¥800×3 + 住宿 ¥1,000×2 → ¥4,400'],
+        ['warn', 'Luz 機械式 · 限高待確認'],
+        ['ok', '暫結：選 Luz 較省；高車或夜間取車則選 Times']
+      ],
+      render() {
+        return `
+          <table>
+            <thead><tr><th>停車場</th><th>費用</th><th>步行</th><th>備註</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Times 天神北</td>
+                <td class="price">¥8,800</td>
+                <td>4–5 分</td>
+                <td><span class="tag">48h 上限累計</span></td>
+              </tr>
+              <tr>
+                <td>Luz 福岡天神</td>
+                <td class="price" style="color:var(--ok)">¥4,400–5,600</td>
+                <td>9–12 分</td>
+                <td><span class="tag warn">機械式</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="result-card" style="margin-top:12px">
+            <h3>暫結</h3>
+            <p>第一輪建議 Luz——但<strong>車高尚未核對</strong>。</p>
+          </div>`;
+      }
+    },
+    {
+      id: 'time',
+      pill: '3 改時段',
+      leftTitle: '條件一改 · 表刷新',
+      leftSub: '「明天早上九點到週六下午四點」→ 共 31 小時。',
+      rightTitle: '31 小時重算',
+      rightSub: '同一座城、同一間飯店，只改時段，價錢就變。',
+      btn: '加上車型 Serena',
+      hint: '下一步：硬約束——限高',
+      progress: 58,
+      chips: [
+        ['進場', '週五 09:00'],
+        ['離場', '週六 16:00'],
+        ['時長', '~31 小時'],
+        ['暫推', 'Luz ¥3,000']
+      ],
+      log: [
+        ['dim', '> agent.recalc(window="Fri 09:00 → Sat 16:00")'],
+        ['hi', '時長鎖定 = 31 小時'],
+        ['', 'Luz：週五 ¥800 + 住宿 ¥1,000 + 週六 ¥1,200 = ¥3,000'],
+        ['', 'Times：預計 ¥6,600'],
+        ['ok', '建議刷新：暫推 Luz（仍未驗車高）']
+      ],
+      render() {
+        return `
+          <div class="compare">
+            <div class="result-card best">
+              <h3>Luz 福岡天神</h3>
+              <div class="big-num" style="color:var(--ok)">¥3,000</div>
+              <p>暫推 · 省約 ¥3,600</p>
+            </div>
+            <div class="vs">VS</div>
+            <div class="result-card">
+              <h3>Times 天神北</h3>
+              <div class="big-num">¥6,600</div>
+              <p>較近，但貴一倍</p>
+            </div>
+          </div>
+          <p style="margin:12px 0 0;color:var(--muted);font-size:12px">Agent 價值在「重算」，不是背答案。</p>`;
+      }
+    },
+    {
+      id: 'height',
+      pill: '4 限高淘汰',
+      leftTitle: '硬約束：Nissan Serena',
+      leftSub: '車高／車重對上物理限制——便宜的選項可能進不去。',
+      rightTitle: 'Luz 淘汰',
+      rightSub: 'Serena ≈ 1.87m；Luz 限高 1.55m。',
+      btn: '總搜最佳＋備援',
+      hint: '下一步：條件清楚後一次總搜',
+      progress: 78,
+      chips: [
+        ['Serena 高', '~1.87–1.89 m'],
+        ['Serena 重', '~1.8 t'],
+        ['Luz 限高', '1.55 m', 'fail'],
+        ['Times 限高', '2.1 m', 'pass']
+      ],
+      log: [
+        ['dim', '> agent.filter(vehicle="Nissan Serena")'],
+        ['bad', 'Luz FAIL：限高 1.55m / 限重 1.6t'],
+        ['', 'Serena：高 ~1.87m · 重 ~1.8t → 兩項超標'],
+        ['ok', 'Times OK：限高 2.1m · 本時段 ≈ ¥6,600'],
+        ['warn', '前一版「最佳」作廢 → 需重新搜尋附近可停選項']
+      ],
+      render() {
+        return `
+          <div class="result-card fail">
+            <h3>Luz 福岡天神 <span class="tag bad">進不去</span></h3>
+            <p>機械式限高 <strong>1.55m</strong> · 限重 1.6t<br/>
+            Serena 車高約 <strong>1.87m</strong> · 車重約 1.8t</p>
+          </div>
+          <div class="result-card" style="margin-top:10px">
+            <h3 class="strike">暫推 Luz ¥3,000</h3>
+            <p>約束一加，排序翻盤。目前這兩個裡只剩 Times ≈ ¥6,600。</p>
+          </div>
+          <div class="result-card" style="margin-top:10px">
+            <h3>Times 天神北 <span class="tag ok">可停</span></h3>
+            <p>限高 2.1m · 但不是最便宜——繼續總搜。</p>
+          </div>`;
+      }
+    },
+    {
+      id: 'best',
+      pill: '5 最佳＋備援',
+      leftTitle: '條件清楚 · 一次總搜',
+      leftSub: '先淘汰機械式 → 再按 31h 總價、步行、取車便利排序。',
+      rightTitle: '最終推薦',
+      rightSub: '最佳 F・PARC；滿位備援南天神。',
+      btn: '再看一次流程',
+      hint: '數字仍要人核對——但搜尋力已看得見',
+      progress: 100,
+      chips: [
+        ['最佳', 'F・PARC ≈ ¥2,900', 'pass'],
+        ['備援', '南天神 ≈ ¥3,100', 'pass'],
+        ['淘汰', 'Luz（限高）', 'fail'],
+        ['偏貴', 'Times ¥6,600']
+      ],
+      log: [
+        ['dim', '> agent.rank(heightOK && 31h && walk && access)'],
+        ['ok', 'BEST  F・PARC GRANDMARK天神 ≈ ¥2,900'],
+        ['', '         步行約 8 分 · 自走式 · Serena 可停'],
+        ['hi', 'BACKUP 南天神 Parking ≈ ¥3,100'],
+        ['', '         車位多 · 24h · Serena 可停'],
+        ['warn', '備註：不可預約／現金為主／滿位需備援']
+      ],
+      render() {
+        return `
+          <div class="result-card best">
+            <h3>最佳 · F・PARC GRANDMARK天神 <span class="tag ok">推薦</span></h3>
+            <div class="big-num" style="color:var(--ok)">≈ ¥2,900</div>
+            <p>週五 08–20 ¥1,200 ＋ 過夜 ¥400 ＋ 週六 08–16 ¥1,300<br/>
+            步行約 8 分 · 限高 2.2m · 自走式 · 現金為主 · 不可預約</p>
+          </div>
+          <div class="result-card backup" style="margin-top:10px">
+            <h3>備援 · 南天神 Parking <span class="tag">滿位下一手</span></h3>
+            <div class="big-num" style="color:var(--accent)">≈ ¥3,100</div>
+            <p>週五 09–20 ¥1,300 ＋ 夜間 ¥300 ＋ 週六 08–16 ¥1,500<br/>
+            渡辺通5丁目 · ~229 車位 · 24h · Serena 可停</p>
+          </div>
+          <div class="result-card" style="margin-top:10px">
+            <h3>對照</h3>
+            <p>Times 近但約 ¥6,600；Luz 因限高已淘汰。條件給清楚，附近能 match 的一次排開。</p>
+          </div>`;
+      }
+    }
+  ];
+
+  let i = 0;
+  const pills = document.getElementById('pills');
+  const agentLog = document.getElementById('agentLog');
+  const condChips = document.getElementById('condChips');
+  const resultPane = document.getElementById('resultPane');
+  const bar = document.getElementById('bar');
+  const btnNext = document.getElementById('btnNext');
+  const btnBack = document.getElementById('btnBack');
+  const hint = document.getElementById('hint');
+
+  function buildPills() {
+    pills.innerHTML = steps.map((s, idx) =>
+      `<button type="button" class="step-pill" data-i="${idx}">${s.pill}</button>`
+    ).join('');
+    pills.querySelectorAll('.step-pill').forEach(el => {
+      el.onclick = () => { i = +el.dataset.i; paint(); };
+    });
+  }
+
+  function paint() {
+    const s = steps[i];
+    document.getElementById('leftTitle').textContent = s.leftTitle;
+    document.getElementById('leftSub').textContent = s.leftSub;
+    document.getElementById('rightTitle').textContent = s.rightTitle;
+    document.getElementById('rightSub').textContent = s.rightSub;
+    hint.textContent = s.hint;
+    bar.style.width = s.progress + '%';
+    btnBack.disabled = i === 0;
+    btnNext.textContent = i === 0 ? '開始搜尋' : (i === steps.length - 1 ? '從頭再看' : s.btn);
+
+    pills.querySelectorAll('.step-pill').forEach((el, idx) => {
+      el.classList.toggle('active', idx === i);
+      el.classList.toggle('done', idx < i);
+    });
+
+    condChips.innerHTML = s.chips.map(c => {
+      const cls = c[2] === 'fail' ? 'chip fail' : c[2] === 'pass' ? 'chip pass' : (c[0] === '暫推' || c[0] === '最佳' ? 'chip hot' : 'chip');
+      return `<span class="${cls}"><b>${c[0]}</b> · ${c[1]}</span>`;
+    }).join('');
+
+    agentLog.innerHTML = '';
+    s.log.forEach((row, n) => {
+      const div = document.createElement('div');
+      div.className = 'line ' + (row[0] || '');
+      div.style.animationDelay = (n * 0.08) + 's';
+      div.textContent = row[1];
+      agentLog.appendChild(div);
+    });
+
+    resultPane.innerHTML = s.render();
+  }
+
+  btnNext.onclick = () => {
+    if (i >= steps.length - 1) i = 0;
+    else i += 1;
+    paint();
+  };
+  btnBack.onclick = () => { if (i > 0) { i -= 1; paint(); } };
+
+  buildPills();
+  paint();
+})();
+</script>
+</body>
+</html>
